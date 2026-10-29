@@ -11,12 +11,14 @@ public class Participant {
     }
 
     public BigInteger getPublicKey() {
-        return parameters.getOrder().modPow(
+        // generator^privateKey mod modulus
+        return parameters.getGenerator().modPow(
             privateKey, parameters.getModulus()
         );
     }
 
     public BigInteger computeSharedSecret(BigInteger otherPublicKey) {
+        // generator^otherPublicKey mod modulus
         return otherPublicKey.modPow(
             privateKey, parameters.getModulus()
         );
