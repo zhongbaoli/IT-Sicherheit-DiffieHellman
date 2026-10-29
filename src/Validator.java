@@ -7,10 +7,10 @@ import java.math.BigInteger;
  * sowie manipulierte öffentliche Schlüssel (z. B. Small Subgroup Attacks) abzufangen.
  */
 
-public class ParameterValidator {
+public class Validator {
 
     // Empfohlene Mindest-Bitlänge für Modulus p
-    public static final int MIN_BIT_LENGTH = 1;  // 512 Bit ist heutzutage ein Minimum, 2048 Bit oder mehr wird empfohlen.
+    public static final int MIN_BIT_LENGTH = 512;  // 512 Bit ist heutzutage ein Minimum, 2048 Bit oder mehr wird empfohlen.
 
     /**
      * 1. Prüfung der öffentlichen Gruppenparameter (p und g).

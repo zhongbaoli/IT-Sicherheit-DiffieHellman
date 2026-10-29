@@ -1,5 +1,4 @@
 import java.math.BigInteger;
-import java.security.MessageDigest;
 import java.util.Scanner;
 
 public class App {
@@ -8,7 +7,7 @@ public class App {
     
     // Beispiel Parameter (können für currentParameters verwendet werden)
     Parameters bigParameters = new Parameters(BigInteger.valueOf(2), new BigInteger( "FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD1" + "29024E088A67CC74020BBEA63B139B22514A08798E3404DD" + "EF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245" + "E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7ED" + "EE386BFB5A899FA5AE9F24117C4B1FE649286651ECE65381" + "F001007573752636664F40C8300000000000000000000000" + "000000000000000000000000000000000000000000000000" + "000000000000000000000000000000000000000000000000" + "000000000000000000000000000000000000000000000000" + "000000000000000000000000000000000000000000000000" + "000000000000000000000000000000000000000000000000" + "FFFFFFFFFFFFFFFF", 16));
-    Parameters smallParameters = new Parameters(5, 23);
+    Parameters smallParameters = new Parameters(3, 30);
 
 
     System.out.println("==================================================");
@@ -23,11 +22,11 @@ public class App {
 
     Parameters currentParameters = smallParameters; // Aktuell verwendete Parameter (kann auf bigParameters geändert werden)
 
-    BigInteger p = currentParameters.getModulus();
-    BigInteger g = currentParameters.getGenerator();
+    BigInteger p = currentParameters.modulus;
+    BigInteger g = currentParameters.generator;
 
     try {
-            ParameterValidator.validateParameters(p, g);
+            Validator.validateParameters(p, g);
         } catch (SecurityException e) {
             System.err.println(e.getMessage());
             System.out.println("Abbruch wegen ungültiger Gruppenparameter!");
@@ -73,10 +72,6 @@ public class App {
     BigInteger publicKeyBob = bob.getPublicKey();
     
     System.out.println("\n--- Öffentliche Schlüssel berechnet ---");
-    System.out.println("Alice schickt Public Key " + publicKeyAlice + " an Bob");
-    System.out.println("Bob schickt Public Key " + publicKeyBob + " an Alice");
-
-    System.out.println();
 
     // ---------------------------------------------------------------------
     // SCHRITT 3: Validierung der berechneten öffentlichen Schlüssel
@@ -84,10 +79,10 @@ public class App {
     System.out.println("--- SCHRITT 3: Validierung der öffentlichen Werte ---");
     try {
         System.out.println("Validiere Alices öffentlichen Wert A...");
-        ParameterValidator.validatePublicValue(publicKeyAlice, p);
+        Validator.validatePublicValue(publicKeyAlice, p);
         
         System.out.println("Validiere Bobs öffentlichen Wert B...");
-        ParameterValidator.validatePublicValue(publicKeyBob, p);
+        Validator.validatePublicValue(publicKeyBob, p);
     } catch (SecurityException e) {
         System.err.println(e.getMessage());
         System.out.println("Abbruch: Die berechneten öffentlichen Werte bestehen die Validierung nicht!");
@@ -95,6 +90,10 @@ public class App {
     }
 
     System.out.println();
+    
+
+
+
 
     // ---------------------------------------------------------------------
     // SCHRITT 4: Übertragung der Schlüssel (Warten auf ENTER)
@@ -107,6 +106,9 @@ public class App {
     System.out.println("   [A] wird an Bob gesendet.");
     System.out.println("   [B] wird an Alice gesendet.");
     System.out.println("-> Übertragung erfolgreich abgeschlossen!\n");
+
+    System.out.println("Alice schickt Public Key " + publicKeyAlice + " an Bob");
+    System.out.println("Bob schickt Public Key " + publicKeyBob + " an Alice");
 
     // ---------------------------------------------------------------------
     // SCHRITT 5: Berechnung des gemeinsamen Geheimnisses & Sitzungsschlüssels
