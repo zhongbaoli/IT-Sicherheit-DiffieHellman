@@ -1,3 +1,5 @@
+package dh;
+
 import java.math.BigInteger;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -34,30 +36,6 @@ public class KeyExchange {
     private static final BigInteger STATIC_ALICE_PRIVATE_KEY = new BigInteger("1234567890ABCDEF1234567890ABCDEF", 16);
     private static final BigInteger STATIC_BOB_PRIVATE_KEY = new BigInteger("FEDCBA0987654321FEDCBA0987654321", 16);
 
-    
-    public static void main(String[] args) {
-        // Beispiel 1: Normaler Ablauf ohne Fehler
-        new KeyExchange()
-            .setAttackType(AttackType.NONE)
-            .setValidationMode(ValidationMode.NONE)
-            .run();
-
-        // Beispiel 2: Angriff 2 OHNE Prüfung (K wird auf 1 erzwungen)
-        new KeyExchange()
-            .setAttackType(AttackType.ATTACK_2)
-            .setValidationMode(ValidationMode.NONE)
-            .run();
-
-        // Beispiel 3: Angriff 2 MIT Prüfung (Wird sicher gestoppt)
-        new KeyExchange()
-            .setAttackType(AttackType.ATTACK_2)
-            .setValidationMode(ValidationMode.VALIDATE_PUBLIC_VALUES)
-            .run();
-
-
-        // Aufruf der ausgelagerten Simulation für Angriff 3
-        simulateAttack3CRT();
-    }
 
     // =========================================================================
     // KONSTRUKTOREN & KONFIGURATION
