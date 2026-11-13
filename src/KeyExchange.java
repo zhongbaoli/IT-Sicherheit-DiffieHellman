@@ -73,7 +73,7 @@ public class KeyExchange {
     // =========================================================================
     public void run() {
         System.out.println("Starte Diffie-Hellman-Schlüsselaustausch...");
-        System.out.println("Verwendete Parameter: p = " + parameters.modulus + ", g = " + parameters.generator);
+        System.out.println("Verwendete Parameter: g = " + parameters.generator + ", p = " + parameters.modulus);
         System.out.println("Angriffstyp: " + attackType);
         System.out.println("Validierungsmodus: " + validationMode);
 

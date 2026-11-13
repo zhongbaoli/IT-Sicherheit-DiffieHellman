@@ -25,13 +25,13 @@ public class Parameters {
         BigInteger p = new BigInteger(
             "D87D936C793132B3EC813B13A78693B140A0F8F12402120464673130D08A46603F2D4C56114F26F824F44DF201940E868725A62EAA989D2278E998B4B8EF55C7", 16);
         BigInteger g = BigInteger.valueOf(2);
-        return new Parameters(p, g);
+        return new Parameters(g, p);
     }
 
     public static Parameters createNonPrimeModulus(){
         BigInteger compositeP = BigInteger.valueOf(1000000007L).multiply(BigInteger.valueOf(1000000009L)); // Zusammengesetzte Zahl
         BigInteger g = BigInteger.valueOf(2);
-        return new Parameters(compositeP, g);
+        return new Parameters(g, compositeP);
     }
 
     public void printGroupAndSubgroup(BigInteger p, BigInteger g) {
