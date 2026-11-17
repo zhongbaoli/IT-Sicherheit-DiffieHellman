@@ -21,7 +21,14 @@ Entwicklung einer Prüfliste für Diffie-Hellman-Parameter und empfangene öffen
   * *Prüfung:* 1 < g < p - 1.
   * *Grund:* Schließt triviale Werte (0, 1, p-1) aus.
 
-#### B. Empfangene öffentliche Schlüssel (Y)
+#### B. Private Schlüssel (x)
+* **Wertebereich**: 1 < x < p - 1
+  * *Prüfung:* Reichweitencheck (schließt triviale Exponenten aus).
+  * *Grund:*
+    * x <= 1: Führt zu trivialen öffentlichen Werten (g^0 = 1, g^1 = g).
+    * x >= p: Bringt keine zusätzliche Sicherheit und erzeugt unnötigen Rechenaufwand
+
+#### C. Empfangene öffentliche Schlüssel (Y)
 * **Reichweiten- & Untergruppenschutz**: 1 < Y < p - 1.
   * *Grund:* 
     * Y <= 1: Erzwingt das triviale Geheimnis K = 1.
