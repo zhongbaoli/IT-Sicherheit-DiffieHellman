@@ -22,6 +22,7 @@ public class Validator {
      * @throws SecurityException wenn Parameter ungültig oder unsicher sind
      */
     public static void validateParameters(BigInteger p, BigInteger g) throws SecurityException {
+        System.out.println("\n[VALIDIERUNG]");
         System.out.println("Starte Validierung der Gruppenparameter (p, g)...");
         System.out.println("Modulus p = " + p);
         System.out.println("Generator g = " + g);
@@ -45,6 +46,21 @@ public class Validator {
         System.out.println("-> Gruppenparameter sind gültig.\n");
     }
 
+    public static void validatePrivateKey(BigInteger privateKey, BigInteger p, String participant) throws SecurityException {
+        System.out.println("\n[VALIDIERUNG]");
+        System.out.println("Starte Validierung des privaten Schlüssels von " + participant + "...");
+        if (privateKey == null) {
+            throw new SecurityException("-> WERTE-FEHLER: Privater Schlüssel ist null!");
+        }
+
+        // Bereichsprüfung für privaten Schlüssel (1 < privateKey < p-1)
+        if (privateKey.compareTo(BigInteger.ONE) <= 0 || privateKey.compareTo(p.subtract(BigInteger.ONE)) >= 0) {
+            throw new SecurityException("-> WERTE-FEHLER: Privater Schlüssel liegt außerhalb des erlaubten Bereichs (1 < privateKey < p-1)!");
+        }
+
+        System.out.println("-> Privater Schlüssel ist gültig.");
+    }
+
     /**
      * 2. Prüfung empfangener öffentlicher Werte (Y = A bzw. B).
      * 
@@ -52,8 +68,9 @@ public class Validator {
      * @param p Modulus der Gruppe
      * @throws SecurityException wenn der Wert in einer gefährlichen Untergruppe liegt
      */
-    public static void validatePublicValue(BigInteger Y, BigInteger p) throws SecurityException {
-
+    public static void validatePublicValue(BigInteger Y, BigInteger p, String participant) throws SecurityException {
+        System.out.println("\n[VALIDIERUNG]");
+        System.out.println("Starte Validierung des öffentlichen Werts Y von " + participant + "...");
         if (Y == null) {
             throw new SecurityException("-> WERTE-FEHLER: Empfangener öffentlicher Wert Y ist null!");
         }
@@ -69,6 +86,6 @@ public class Validator {
             throw new SecurityException("-> WERTE-FEHLER: Empfangener Wert Y >= p-1! (Gefahr: Kleine Untergruppe der Ordnung 2)");
         }
 
-        System.out.println("-> Empfangener öffentlicher Wert Y ist gültig (1 < Y < p-1).\n");
+        System.out.println("-> Empfangener öffentlicher Wert Y von " + participant + " ist gültig.\n");
     }
 }

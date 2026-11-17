@@ -73,9 +73,9 @@ public class KeyExchange {
     // =========================================================================
     public void run() {
         System.out.println("Starte Diffie-Hellman-Schlüsselaustausch...");
-        System.out.println("Verwendete Parameter: g = " + parameters.generator + ", p = " + parameters.modulus);
         System.out.println("Angriffstyp: " + attackType);
         System.out.println("Validierungsmodus: " + validationMode);
+        System.out.println("Verwendete Parameter: g = " + parameters.generator + ", p = " + parameters.modulus);
 
         try {
             // 1. SETUP DER PARAMETER (Angriff 2 verändert die Parameter)
@@ -90,11 +90,12 @@ public class KeyExchange {
             if (validationMode == ValidationMode.VALIDATE_PARAMETERS || validationMode == ValidationMode.BOTH) {
                 Validator.validateParameters(activeParameters.modulus, activeParameters.generator);
             } else {
-                System.out.println("-> Keine Validierung der Gruppenparameter durchgeführt.");
+                System.out.println("\n-> Keine Validierung der Gruppenparameter durchgeführt.");
             }
 
             // 3. SCHLÜSSELGENERIERUNG (Angriff 3 nutzt erzwungene statische Schlüssel)
             BigInteger alicePrivateKey, bobPrivateKey;
+
             //@Krushali
             if (attackType == AttackType.ATTACK_3 || attackType == AttackType.ALL) {
                 // Beispiel für einen Angriff: Verwende statische Schlüssel
@@ -105,6 +106,10 @@ public class KeyExchange {
                 alicePrivateKey = new BigInteger(activeParameters.modulus.bitLength() - 1, random);
                 bobPrivateKey = new BigInteger(activeParameters.modulus.bitLength() - 1, random);
             }
+
+            // 2. VALIDIERUNG DER PRIVATEN SCHLÜSSEL
+            Validator.validatePrivateKey(STATIC_ALICE_PRIVATE_KEY, activeParameters.modulus, "Alice");
+            Validator.validatePrivateKey(STATIC_BOB_PRIVATE_KEY, activeParameters.modulus, "Bob");
 
             BigInteger alicePublicKey = activeParameters.generator.modPow(alicePrivateKey, activeParameters.modulus);
             BigInteger bobPublicKey = activeParameters.generator.modPow(bobPrivateKey, activeParameters.modulus);
@@ -139,8 +144,10 @@ public class KeyExchange {
 
             // 5. WERTEVALIDIERUNG VOR BERECHNUNG (falls Validierungsmodus == VALIDATE_PUBLIC_VALUES)
             if (validationMode == ValidationMode.VALIDATE_PUBLIC_VALUES  || validationMode == ValidationMode.BOTH) {
-                Validator.validatePublicValue(aliceReceivedPublicKey, activeParameters.modulus);
-                Validator.validatePublicValue(bobReceivedPublicKey, activeParameters.modulus);
+                Validator.validatePublicValue(aliceReceivedPublicKey, activeParameters.modulus, "Alice");
+                Validator.validatePublicValue(bobReceivedPublicKey, activeParameters.modulus, "Bob");
+            } else {
+                System.out.println("\n-> Keine Validierung der öffentlichen Werte durchgeführt.");
             }
 
             // 6. GEHEIMNISBERECHNUNG
