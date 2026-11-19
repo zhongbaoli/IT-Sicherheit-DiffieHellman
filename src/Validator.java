@@ -1,6 +1,8 @@
 package dh;
 
 import java.math.BigInteger;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Prüfliste für Diffie-Hellman-Parameter und öffentliche Werte
@@ -13,6 +15,8 @@ public class Validator {
 
     // Empfohlene Mindest-Bitlänge für Modulus p
     public static final int MIN_BIT_LENGTH = 512;  // 512 Bit ist heutzutage ein Minimum, 2048 Bit oder mehr wird empfohlen.
+
+    public static final Set<BigInteger> usedPrivateKeys = new HashSet<>();
 
     /**
      * 1. Prüfung der öffentlichen Gruppenparameter (p und g).
@@ -46,7 +50,7 @@ public class Validator {
         System.out.println("-> Gruppenparameter sind gültig.\n");
     }
 
-    public static void validatePrivateKey(BigInteger privateKey, BigInteger p, String participant) throws SecurityException {
+    public static synchronized void validatePrivateKey(BigInteger privateKey, BigInteger p, String participant) throws SecurityException {
         System.out.println("\n[VALIDIERUNG]");
         System.out.println("Starte Validierung des privaten Schlüssels von " + participant + "...");
         if (privateKey == null) {
@@ -57,6 +61,12 @@ public class Validator {
         if (privateKey.compareTo(BigInteger.ONE) <= 0 || privateKey.compareTo(p.subtract(BigInteger.ONE)) >= 0) {
             throw new SecurityException("-> WERTE-FEHLER: Privater Schlüssel liegt außerhalb des erlaubten Bereichs (1 < privateKey < p-1)!");
         }
+
+        if (usedPrivateKeys.contains(privateKey)) {
+            throw new SecurityException("-> SCHLÜSSELWIEDERVERWENDUNG: Privater Schlüssel wurde bereits in einer früheren Sitzung verwendet!");
+        }
+
+        usedPrivateKeys.add(privateKey);
 
         System.out.println("-> Privater Schlüssel ist gültig.");
     }

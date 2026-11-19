@@ -21,9 +21,7 @@ public class KeyExchange {
 
     public enum ValidationMode {
         NONE,
-        VALIDATE_PARAMETERS,
-        VALIDATE_PUBLIC_VALUES,
-        BOTH
+        VALIDATE
     }
 
     // =========================================================================
@@ -78,25 +76,25 @@ public class KeyExchange {
         System.out.println("Verwendete Parameter: g = " + parameters.generator + ", p = " + parameters.modulus);
 
         try {
-            // 1. SETUP DER PARAMETER (Angriff 2 verändert die Parameter)
+            // 1. SETUP DER PARAMETER
             Parameters activeParameters = this.parameters;
-            //@Krushali
+
+            // 1.1 ANGRIFF 2: p ist nicht prim
             if (attackType == AttackType.ATTACK_2 || attackType == AttackType.ALL) {
-                // Beispiel für einen Angriff: Verwende ein unsicheres p
                 activeParameters = Parameters.createNonPrimeModulus();
             }
 
-            // 2. VALIDIERUNG DER PARAMETER (falls Validierungsmodus == VALIDATE_PARAMETERS)
-            if (validationMode == ValidationMode.VALIDATE_PARAMETERS || validationMode == ValidationMode.BOTH) {
+            // 1.2 VALIDIERUNG DER PARAMETER
+            if (validationMode == ValidationMode.VALIDATE) {
                 Validator.validateParameters(activeParameters.modulus, activeParameters.generator);
             } else {
                 System.out.println("\n-> Keine Validierung der Gruppenparameter durchgeführt.");
             }
 
-            // 3. SCHLÜSSELGENERIERUNG (Angriff 3 nutzt erzwungene statische Schlüssel)
+            // 2. SCHLÜSSELGENERIERUNG
             BigInteger alicePrivateKey, bobPrivateKey;
 
-            //@Krushali
+            // 2.1 ANGRIFF 3: Statische Schlüssel über mehrere Sitzungen
             if (attackType == AttackType.ATTACK_3 || attackType == AttackType.ALL) {
                 // Beispiel für einen Angriff: Verwende statische Schlüssel
                 alicePrivateKey = STATIC_ALICE_PRIVATE_KEY;
@@ -107,10 +105,15 @@ public class KeyExchange {
                 bobPrivateKey = new BigInteger(activeParameters.modulus.bitLength() - 1, random);
             }
 
-            // 2. VALIDIERUNG DER PRIVATEN SCHLÜSSEL
-            Validator.validatePrivateKey(STATIC_ALICE_PRIVATE_KEY, activeParameters.modulus, "Alice");
-            Validator.validatePrivateKey(STATIC_BOB_PRIVATE_KEY, activeParameters.modulus, "Bob");
-
+            // 2.2 VALIDIERUNG DER PRIVATEN SCHLÜSSEL
+            if (validationMode == ValidationMode.VALIDATE) {
+                Validator.validatePrivateKey(STATIC_ALICE_PRIVATE_KEY, activeParameters.modulus, "Alice");
+                Validator.validatePrivateKey(STATIC_BOB_PRIVATE_KEY, activeParameters.modulus, "Bob");
+            } else {
+                System.out.println("\n-> Keine Validierung der privaten Schlüssel durchgeführt.");
+            }
+            
+            // 3. BERECHNUNG DER ÖFFENTLICHEN WERTE
             BigInteger alicePublicKey = activeParameters.generator.modPow(alicePrivateKey, activeParameters.modulus);
             BigInteger bobPublicKey = activeParameters.generator.modPow(bobPrivateKey, activeParameters.modulus);
 
@@ -118,11 +121,10 @@ public class KeyExchange {
             System.out.println("  • Alices öffentlicher Wert A: " + truncateHex(alicePublicKey));
             System.out.println("  • Bobs öffentlicher Wert B:   " + truncateHex(bobPublicKey));
 
-            // 4. ANGRIFF: MANIPULATION DER ÖFFENTLICHEN WERTE
             BigInteger aliceReceivedPublicKey = bobPublicKey;
             BigInteger bobReceivedPublicKey = alicePublicKey;
 
-            //@Krushali
+            // 3.1 ANGRIFF: MANIPULATION DER ÖFFENTLICHEN WERTE
             if (attackType == AttackType.ATTACK_1 || attackType == AttackType.ATTACK_3 || attackType == AttackType.ALL) {
                 
                 // Wenn ein spezieller Wert gesetzt wurde, nimm diesen. Sonst standardmäßig p-1.
@@ -130,27 +132,23 @@ public class KeyExchange {
                                             ? injectedAttackerValue 
                                             : activeParameters.modulus.subtract(BigInteger.ONE);
                 
-                // Angreifer fängt den Wert ab und sendet seinen manipulierten Wert an Bob
+                // Angreifer fängt Werte ab und sendet seinen manipulierten Wert an Bob & Alice
                 bobReceivedPublicKey = maliciousValue;
-                
-                // TIPP: Damit Alice und Bob denselben falschen Schlüssel berechnen 
-                // und die Kommunikation nicht sofort abbricht, sollte der Angreifer 
-                // auch Alice den falschen Wert unterjubeln:
                 aliceReceivedPublicKey = maliciousValue;
                 
                 System.out.println("\n[ANGRIFF] Angreifer fängt den Schlüsselaustausch ab!");
                 System.out.println(" [ANGRIFF] Er sendet stattdessen " + maliciousValue + " an die Parteien.");
             }
 
-            // 5. WERTEVALIDIERUNG VOR BERECHNUNG (falls Validierungsmodus == VALIDATE_PUBLIC_VALUES)
-            if (validationMode == ValidationMode.VALIDATE_PUBLIC_VALUES  || validationMode == ValidationMode.BOTH) {
+            // 3.2 WERTEVALIDIERUNG VOR BERECHNUNG
+            if (validationMode == ValidationMode.VALIDATE) {
                 Validator.validatePublicValue(aliceReceivedPublicKey, activeParameters.modulus, "Alice");
                 Validator.validatePublicValue(bobReceivedPublicKey, activeParameters.modulus, "Bob");
             } else {
                 System.out.println("\n-> Keine Validierung der öffentlichen Werte durchgeführt.");
             }
 
-            // 6. GEHEIMNISBERECHNUNG
+            // 4. GEHEIMNISBERECHNUNG
             BigInteger aliceRawSecret = aliceReceivedPublicKey.modPow(alicePrivateKey, activeParameters.modulus);
             BigInteger bobRawSecret = bobReceivedPublicKey.modPow(bobPrivateKey, activeParameters.modulus);
 
@@ -166,8 +164,8 @@ public class KeyExchange {
             boolean keysMatch = MessageDigest.isEqual(aliceKey, bobKey);
             System.out.println("\n==> Ergebnis: Sitzungsschlüssel stimmen überein? " + keysMatch);
 
-            if (attackType == AttackType.ATTACK_1 && validationMode == ValidationMode.NONE || validationMode == ValidationMode.VALIDATE_PARAMETERS) {
-                System.out.println("WARNUNG: Angriff 2 war erfolgreich! Das Geheimnis K wurde auf den festen Wert " + aliceRawSecret + " gezwungen!");
+            if (attackType == AttackType.ATTACK_1 && validationMode == ValidationMode.NONE) {
+                System.out.println("[ANGRIFF] Angriff 2 war erfolgreich! Das Geheimnis K wurde auf den festen Wert " + aliceRawSecret + " gezwungen!");
             }
             
         } catch (SecurityException e) {
