@@ -46,6 +46,10 @@ public class Parameters {
         return new Parameters(g, compositeP);
     }
 
+    public static Parameters createSmall31Bit() {
+        return new Parameters(3, 31);
+    }
+
     public void printGroupAndSubgroup(BigInteger p, BigInteger g) {
         System.out.println("==================================================");
         System.out.println("GRUPPEN- UND UNTERGRUPPEN-ANALYSE");

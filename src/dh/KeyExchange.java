@@ -21,7 +21,10 @@ public class KeyExchange {
 
     public enum ValidationMode {
         NONE,
-        VALIDATE
+        VALIDATE,
+        VALIDATE_PARAMETERS,
+        VALIDATE_PUBLIC_VALUES,
+        BOTH
     }
 
     // =========================================================================
@@ -75,6 +78,10 @@ public KeyExchange setCustomBobPrivateKey(BigInteger key) {
     return this;
 }
 
+public KeyExchange setBobPrivateKey(BigInteger key) {
+    return setCustomBobPrivateKey(key);
+}
+
 public byte[] getLastBobSessionKey() {
     return this.lastBobSessionKey;
 }
@@ -100,7 +107,9 @@ public byte[] getLastBobSessionKey() {
             }
 
             // 1.2 VALIDIERUNG DER PARAMETER
-            if (validationMode == ValidationMode.VALIDATE) {
+            if (validationMode == ValidationMode.VALIDATE 
+                    || validationMode == ValidationMode.VALIDATE_PARAMETERS 
+                    || validationMode == ValidationMode.BOTH) {
                 Validator.validateParameters(activeParameters.modulus, activeParameters.generator);
             } else {
                 System.out.println("\n-> Keine Validierung der Gruppenparameter durchgeführt.");
@@ -121,7 +130,8 @@ public byte[] getLastBobSessionKey() {
             }
 
             // 2.2 VALIDIERUNG DER PRIVATEN SCHLÜSSEL
-            if (validationMode == ValidationMode.VALIDATE) {
+            if (validationMode == ValidationMode.VALIDATE 
+                    || validationMode == ValidationMode.BOTH) {
                 Validator.validatePrivateKey(alicePrivateKey, activeParameters.modulus, "Alice");
                 Validator.validatePrivateKey(bobPrivateKey, activeParameters.modulus, "Bob");
             } else {
@@ -156,7 +166,9 @@ public byte[] getLastBobSessionKey() {
             }
 
             // 3.2 WERTEVALIDIERUNG VOR BERECHNUNG
-            if (validationMode == ValidationMode.VALIDATE) {
+            if (validationMode == ValidationMode.VALIDATE 
+                    || validationMode == ValidationMode.VALIDATE_PUBLIC_VALUES 
+                    || validationMode == ValidationMode.BOTH) {
                 Validator.validatePublicValue(aliceReceivedPublicKey, activeParameters.modulus, "Alice");
                 Validator.validatePublicValue(bobReceivedPublicKey, activeParameters.modulus, "Bob");
             } else {
@@ -212,10 +224,16 @@ public byte[] getLastBobSessionKey() {
     }
 
     public static void simulateAttack3CRT() {
+        simulateAttack3CRT(13);
+    }
+
+    public static void simulateAttack3CRT(int secretBobKey) {
+        simulateAttack3CRT(BigInteger.valueOf(secretBobKey));
+    }
+
+    public static void simulateAttack3CRT(BigInteger secretBobKey) {
         // Setup für die Demo: p = 31 (damit p - 1 = 30 = 2 * 3 * 5), g = 3
         Parameters demoParams = new Parameters(3, 31);
-        // Bobs geheimer statischer Schlüssel (zwischen 2 und 29, dem Angreifer unbekannt)
-        BigInteger secretBobKey = BigInteger.valueOf(13);
 
         System.out.println("\n--- SITZUNG 1 (Angreifer sendet 30, erzeugt 2er Gruppe) ---");
         BigInteger fake1 = BigInteger.valueOf(30L);
@@ -231,22 +249,22 @@ public byte[] getLastBobSessionKey() {
         System.out.println("\n--- SITZUNG 2 (Angreifer sendet 25, erzeugt 3er Gruppe) ---");
         BigInteger fake2 = BigInteger.valueOf(25L);
         KeyExchange session2 = new KeyExchange()
-        .setParameters(demoParams)
-        .setCustomBobPrivateKey(secretBobKey)
-        .setAttackType(KeyExchange.AttackType.ATTACK_3)
-        .setValidationMode(KeyExchange.ValidationMode.NONE)
-        .setInjectedAttackerValue(fake2);
+            .setParameters(demoParams)
+            .setCustomBobPrivateKey(secretBobKey)
+            .setAttackType(KeyExchange.AttackType.ATTACK_3)
+            .setValidationMode(KeyExchange.ValidationMode.NONE)
+            .setInjectedAttackerValue(fake2);
         session2.run();
         int rest3 = deduceRemainder(fake2, demoParams.modulus, session2.getLastBobSessionKey());
 
         System.out.println("\n--- SITZUNG 3 (Angreifer sendet 16, erzeugt 5er Gruppe) ---");
         BigInteger fake3 = BigInteger.valueOf(16L);
         KeyExchange session3 = new KeyExchange()
-        .setParameters(demoParams)
-        .setCustomBobPrivateKey(secretBobKey)
-        .setAttackType(KeyExchange.AttackType.ATTACK_3)
-        .setValidationMode(KeyExchange.ValidationMode.NONE)
-        .setInjectedAttackerValue(fake3);
+            .setParameters(demoParams)
+            .setCustomBobPrivateKey(secretBobKey)
+            .setAttackType(KeyExchange.AttackType.ATTACK_3)
+            .setValidationMode(KeyExchange.ValidationMode.NONE)
+            .setInjectedAttackerValue(fake3);
         session3.run();
         int rest5 = deduceRemainder(fake3, demoParams.modulus, session3.getLastBobSessionKey());
 
@@ -256,12 +274,8 @@ public byte[] getLastBobSessionKey() {
         System.out.println("Bob's Private Key % 3 = " + rest3);
         System.out.println("Bob's Private Key % 5 = " + rest5);
 
-        for (int candidate = 1; candidate < 31; ++candidate) {
-        if (candidate % 2 == rest2 && candidate % 3 == rest3 && candidate % 5 == rest5) {
-            System.out.println("==> BINGO! Der Angreifer hat Bobs statischen privaten Schlüssel berechnet: " + candidate);
-            break;
-        }
-        }
+        BigInteger recovered = solveCRT(new int[]{rest2, rest3, rest5}, new int[]{2, 3, 5});
+        System.out.println("==> BINGO! Der Angreifer hat Bobs statischen privaten Schlüssel berechnet: " + recovered);
     }
 
     public static int calculateSubgroupOrder(BigInteger injectedValue, BigInteger p) {
@@ -278,9 +292,12 @@ public byte[] getLastBobSessionKey() {
         return order;
     }
 
-    private static int deduceRemainder(BigInteger injectedValue, BigInteger p, byte[] bobSessionKey) {
+    public static int deduceRemainder(BigInteger injectedValue, BigInteger p, byte[] bobSessionKey) {
         int subgroupOrder = calculateSubgroupOrder(injectedValue, p);
+        return deduceRemainder(injectedValue, subgroupOrder, p, bobSessionKey);
+    }
 
+    public static int deduceRemainder(BigInteger injectedValue, int subgroupOrder, BigInteger p, byte[] bobSessionKey) {
         for (int r = 0; r < subgroupOrder; r++) {
             BigInteger candidateSecret = injectedValue.modPow(BigInteger.valueOf(r), p);
             byte[] candidateKey = deriveSHA256Key(candidateSecret);
@@ -290,6 +307,34 @@ public byte[] getLastBobSessionKey() {
             }
         }
         throw new IllegalStateException("Kein passender Rest in der Untergruppe gefunden.");
+    }
+
+    public static int determineRemainderFromSession(KeyExchange session, BigInteger injectedValue, int subgroupOrder, BigInteger p) {
+        return deduceRemainder(injectedValue, subgroupOrder, p, session.getLastBobSessionKey());
+    }
+
+    public static int determineRemainderFromSession(KeyExchange session, BigInteger injectedValue, BigInteger p) {
+        return deduceRemainder(injectedValue, p, session.getLastBobSessionKey());
+    }
+
+    public static BigInteger solveCRT(int[] remainders, int[] moduli) {
+        int product = 1;
+        for (int m : moduli) {
+            product *= m;
+        }
+        for (int candidate = 1; candidate < product; candidate++) {
+            boolean match = true;
+            for (int i = 0; i < remainders.length; i++) {
+                if (candidate % moduli[i] != remainders[i]) {
+                    match = false;
+                    break;
+                }
+            }
+            if (match) {
+                return BigInteger.valueOf(candidate);
+            }
+        }
+        return BigInteger.valueOf(-1);
     }
 
     public static void main(String[] args) {
