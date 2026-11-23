@@ -66,6 +66,21 @@ public class KeyExchange {
         return this;
     }
 
+    // Neue Felder in KeyExchange.java:
+private BigInteger customBobPrivateKey = null;
+private byte[] lastBobSessionKey = null;
+
+public KeyExchange setCustomBobPrivateKey(BigInteger key) {
+    this.customBobPrivateKey = key;
+    return this;
+}
+
+public byte[] getLastBobSessionKey() {
+    return this.lastBobSessionKey;
+}
+
+    
+
     // =========================================================================
     // Schlüsselaustausch (Run)
     // =========================================================================
@@ -98,7 +113,7 @@ public class KeyExchange {
             if (attackType == AttackType.ATTACK_3 || attackType == AttackType.ALL) {
                 // Beispiel für einen Angriff: Verwende statische Schlüssel
                 alicePrivateKey = STATIC_ALICE_PRIVATE_KEY;
-                bobPrivateKey = STATIC_BOB_PRIVATE_KEY;
+    bobPrivateKey = (customBobPrivateKey != null) ? customBobPrivateKey : STATIC_BOB_PRIVATE_KEY;
             } else {
                 SecureRandom random = new SecureRandom();
                 alicePrivateKey = new BigInteger(activeParameters.modulus.bitLength() - 1, random);
@@ -155,6 +170,8 @@ public class KeyExchange {
             byte[] aliceKey = deriveSHA256Key(aliceRawSecret);
             byte[] bobKey   = deriveSHA256Key(bobRawSecret);
 
+            this.lastBobSessionKey = bobKey; // Speichere Bobs Sitzungsschlüssel für mögliche spätere Angriffe
+
             System.out.println("\n[Ergebnisse]");
             System.out.println("  • Alices rohes K: " + truncateHex(aliceRawSecret));
             System.out.println("  • Bobs rohes K:   " + truncateHex(bobRawSecret));
@@ -195,50 +212,88 @@ public class KeyExchange {
     }
 
     public static void simulateAttack3CRT() {
-        System.out.println("\n=======================================================");
-        System.out.println("=== DEMO: ANGRIFF 3 (Statischer Schlüssel + CRT) ===");
-        System.out.println("=======================================================");
-        
-        System.out.println("\n--- SITZUNG 1 (Angreifer sendet 30, erzeugt 2er Gruppe) ---");
-        KeyExchange session1 = new KeyExchange()
-            .setAttackType(AttackType.ATTACK_3)
-            .setValidationMode(ValidationMode.NONE)
-            .setInjectedAttackerValue(BigInteger.valueOf(30)); 
-        session1.run();
-        // Erkenntnis aus Sitzung 1
-        int rest2 = 1;
+    // Setup für die Demo: p = 31 (damit p - 1 = 30 = 2 * 3 * 5), g = 3
+    Parameters demoParams = new Parameters(3, 31);
+    // Bobs geheimer statischer Schlüssel (zwischen 2 und 29, dem Angreifer unbekannt)
+    BigInteger secretBobKey = BigInteger.valueOf(13);
 
-        System.out.println("\n--- SITZUNG 2 (Angreifer sendet 25, erzeugt 3er Gruppe) ---");
-        KeyExchange session2 = new KeyExchange()
-            .setAttackType(AttackType.ATTACK_3)
-            .setValidationMode(ValidationMode.NONE)
-            .setInjectedAttackerValue(BigInteger.valueOf(25)); 
-        session2.run();
-        // Erkenntnis aus Sitzung 2
-        int rest3 = 1;
+System.out.println("\n--- SITZUNG 1 (Angreifer sendet 30, erzeugt 2er Gruppe) ---");
+BigInteger fake1 = BigInteger.valueOf(30L);
+KeyExchange session1 = new KeyExchange()
+    .setParameters(demoParams)
+    .setCustomBobPrivateKey(secretBobKey)
+    .setAttackType(KeyExchange.AttackType.ATTACK_3)
+    .setValidationMode(KeyExchange.ValidationMode.NONE)
+    .setInjectedAttackerValue(fake1);
+session1.run();
+int rest2 = deduceRemainder(fake1, demoParams.modulus, session1.getLastBobSessionKey());
 
-        System.out.println("\n--- SITZUNG 3 (Angreifer sendet 16, erzeugt 5er Gruppe) ---");
-        KeyExchange session3 = new KeyExchange()
-            .setAttackType(AttackType.ATTACK_3)
-            .setValidationMode(ValidationMode.NONE)
-            .setInjectedAttackerValue(BigInteger.valueOf(16)); 
-        session3.run();
-        // Erkenntnis aus Sitzung 3
-        int rest5 = 3;
+System.out.println("\n--- SITZUNG 2 (Angreifer sendet 25, erzeugt 3er Gruppe) ---");
+BigInteger fake2 = BigInteger.valueOf(25L);
+KeyExchange session2 = new KeyExchange()
+    .setParameters(demoParams)
+    .setCustomBobPrivateKey(secretBobKey)
+    .setAttackType(KeyExchange.AttackType.ATTACK_3)
+    .setValidationMode(KeyExchange.ValidationMode.NONE)
+    .setInjectedAttackerValue(fake2);
+session2.run();
+int rest3 = deduceRemainder(fake2, demoParams.modulus, session2.getLastBobSessionKey());
 
-        System.out.println("\n [ANGRIFF 3 - FINALE] Chinesischer Restsatz wird angewendet...");
-        System.out.println("Angreifer weiß nun:");
-        System.out.println("Bob's Private Key % 2 = " + rest2);
-        System.out.println("Bob's Private Key % 3 = " + rest3);
-        System.out.println("Bob's Private Key % 5 = " + rest5);
-        
-        // Der Angreifer löst das Gleichungssystem
-        for (int i = 1; i < 31; i++) {
-            if (i % 2 == rest2 && i % 3 == rest3 && i % 5 == rest5) {
-                System.out.println("==> BINGO! Der Angreifer hat Bobs statischen privaten Schlüssel berechnet: " + i);
-                break;
-            }
+System.out.println("\n--- SITZUNG 3 (Angreifer sendet 16, erzeugt 5er Gruppe) ---");
+BigInteger fake3 = BigInteger.valueOf(16L);
+KeyExchange session3 = new KeyExchange()
+    .setParameters(demoParams)
+    .setCustomBobPrivateKey(secretBobKey)
+    .setAttackType(KeyExchange.AttackType.ATTACK_3)
+    .setValidationMode(KeyExchange.ValidationMode.NONE)
+    .setInjectedAttackerValue(fake3);
+session3.run();
+int rest5 = deduceRemainder(fake3, demoParams.modulus, session3.getLastBobSessionKey());
+
+System.out.println("\n [ANGRIFF 3 - FINALE] Chinesischer Restsatz wird angewendet...");
+System.out.println("Angreifer weiß nun:");
+System.out.println("Bob's Private Key % 2 = " + rest2);
+System.out.println("Bob's Private Key % 3 = " + rest3);
+System.out.println("Bob's Private Key % 5 = " + rest5);
+
+for (int candidate = 1; candidate < 31; ++candidate) {
+    if (candidate % 2 == rest2 && candidate % 3 == rest3 && candidate % 5 == rest5) {
+        System.out.println("==> BINGO! Der Angreifer hat Bobs statischen privaten Schlüssel berechnet: " + candidate);
+        break;
+    }
+}
+    }
+
+    public static int calculateSubgroupOrder(BigInteger injectedValue, BigInteger p) {
+    BigInteger current = injectedValue.mod(p);
+    if (current.equals(BigInteger.ZERO)) {
+        throw new IllegalArgumentException("Wert darf nicht durch p teilbar sein.");
+    }
+
+    int order = 1;
+    while (!current.equals(BigInteger.ONE)) {
+        current = current.multiply(injectedValue).mod(p);
+        order++;
+    }
+    return order;
+}
+
+    private static int deduceRemainder(BigInteger injectedValue, BigInteger p, byte[] bobSessionKey) {
+    int subgroupOrder = calculateSubgroupOrder(injectedValue, p);
+
+    for (int r = 0; r < subgroupOrder; r++) {
+        BigInteger candidateSecret = injectedValue.modPow(BigInteger.valueOf(r), p);
+        byte[] candidateKey = deriveSHA256Key(candidateSecret);
+
+        if (MessageDigest.isEqual(candidateKey, bobSessionKey)) {
+            return r;
         }
     }
+    throw new IllegalStateException("Kein passender Rest in der Untergruppe gefunden.");
+}
+
+public static void main(String[] args) {
+    simulateAttack3CRT();
+}
 
 }
