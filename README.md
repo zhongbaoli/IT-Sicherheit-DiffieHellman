@@ -81,3 +81,36 @@ Zu Demonstrationszwecken lässt sich der Validierungsmodus für jeden Austausch 
 ### 4. Vorher/Nachher-Vergleich und Verhalten im System
 
 table TBD
+
+
+## Teilaufgabe ?: Praxisbezug und Einordnung (Julian)
+
+### 1. Reale Protokolle mit Diffie-Hellman
+Diffie-Hellman (oder moderne Varianten davon) werden in einigen Protokollen verwendet, wie zum Beispiel TLS 1.3 (für HTTPS) oder SSH. Diese Nutzen unterschiedliche Varianten von Diffie-Hellman, wie ECDHE oder MODP-Gruppen.
+
+#### A. ECDHE
+ECDHE steht für Elliptic Curve Diffie-Hellman Ephemeral. Der Name kommt daher, dass die mathematischen Berechnungen anhand von elliptischen Kurven durchgeführt werden, sowie, dass die Schlüssel temporär sind und pro Sitzung neue Schlüssel erzeugt werden.
+
+#### B. MODP
+MODP steht für Modular Exponential. Dabei wird Diffie-Hellman mit einer großen Primzahl und modularer Arithmetik durchgeführt. Dafür werden standardisierte Gruppen verwendet, 
+
+### 2. Parameterprüfung
+Die Parameterprüfung hilft im generellen, um sicherzugehen, dass die gewählten Parameter mathematisch "sicher genug" sind, beziehungsweise, dass für dieses Verfahren "gültige" Werte ausgewählt wurden und nicht manipuliert wurden.
+Damit kann Angriffen bereits entgegengewirkt werden, die Parameter manipulieren, um die Schlüssel leichter ausrechnen zu können, oder die sonst auf andere Wege die Parameter verändern. Ein Beispiel dafür sind sogenannte Small-Subgroup-Angriffe, bei denen speziell gewählte Werte aus kleinen Untergruppen dazu verwendet werden können, Informationen über einen privaten Schlüssel zu gewinnen.
+
+### 3. Man-in-the-Middle Angriff
+Gerade, wenn der Schlüsselaustausch nicht authentifiziert ist, kann sich eine beliebige Partei beim Verbindungsaufbau zwischen die Personen stellen und die Nachrichten zur Schlüsselvereinbarung abfangen und selbst Schlüssel mit beiden vereinbaren. So können die beiden Parteien immernoch ohne etwas zu bemerken kommunizieren, allerdings befindet sich eine weitere Person in der Mitte, die die Nachrichten eben mitlesen kann.
+
+Die verbreitetste Variante, um mit Angriffen wie einem Man-in-the-Middle-Angriff umzugehen sind mit Zertifikaten oder Signaturen. SSH zum Beispiel im konkreten funktioniert so, dass der Server einen Host-Key besitzt, mit dem er die Daten signiert. Der Client kann diesen dann mit einer beim ersten Kontakt erstellten Liste der known hosts abgleichen, um zu schauen, dass er mit dem richtigen Server kommuniziert. Das Problem hierbei ist, dass, wenn ein Angreifer an einen gültigen Host-Key drankommt, sich dieser unerkannt beliebig mit dem Client sprechen kann.
+
+Trotz Zertifikaten oder Signaturen eine Parameterprfung zu haben schadet aber offensichtlicherweise nicht, für den Fall, dass das gewählte Medium dennoch auf irgendeine Art und Weise unsicher ist. So kann dann immernoch gegen bösartig gewählte Parameter geschützt werden.
+
+### 4. Forward Secrecy
+Forward Secrecy ist hier keine, sondern schützt vergangene Kommunikation vor nachträglicher Entschlüsselung. Das bedeutet im Regelfall, dass zum Beispiel bei ECDHE im Gegensatz zum normalen Diffie-Hellman für jede Sitzung neue Schlüssel erzeugt werden. Dadurch kann, selbst wenn ein Schlüssel kompromittiert wird, mit diesem dann nur die Nachrichten der momentanen Sitzung ausgelsen werden, da die älteren Sitzungen andere, unabhängige Schlüssel verwedeten.
+
+### 5. Restrisiken
+Selbst wenn nun das Verfahren so gut wie mögich durchgeführt wird, gibt es aber immernoch andere Arten, wie die Kommunikation hier Angegriffen werden kann.
+Diffie-Hellman ist ein Verfahren, um die Übertagung zwischen den Geräten zu verschlüsseln. Auf den Geräten selber sind die Nachrichten dann aber unverschlüsselt. Das Verfahren hilft also gar nicht, wenn eins der kommunizierenden Geräte bereits kompromittiert ist.
+Andere Methoden, die nicht direkt auf die Übertragung abzielen, wie zum Beispiel Seitenkanalangriffe, funktionieren demnach auch.
+
+Mit einem Gedanken an die Zukunft ist auch zu erwähnen, dass das Verfahren nicht gegen Quantencomputer schützt. Es gibt bereits Algorithmen, mit denen private Schlüssel aus den öffentlichen Werten ausgerechnet werden könnten. Die Technologie dafür existiert zwar noch nicht, aber funktioniert in der Theorie.
