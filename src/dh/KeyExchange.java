@@ -122,8 +122,8 @@ public byte[] getLastBobSessionKey() {
 
             // 2.2 VALIDIERUNG DER PRIVATEN SCHLÜSSEL
             if (validationMode == ValidationMode.VALIDATE) {
-                Validator.validatePrivateKey(STATIC_ALICE_PRIVATE_KEY, activeParameters.modulus, "Alice");
-                Validator.validatePrivateKey(STATIC_BOB_PRIVATE_KEY, activeParameters.modulus, "Bob");
+                Validator.validatePrivateKey(alicePrivateKey, activeParameters.modulus, "Alice");
+                Validator.validatePrivateKey(bobPrivateKey, activeParameters.modulus, "Bob");
             } else {
                 System.out.println("\n-> Keine Validierung der privaten Schlüssel durchgeführt.");
             }
