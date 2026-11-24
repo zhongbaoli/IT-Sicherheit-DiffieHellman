@@ -16,15 +16,19 @@ public class KeyExchange {
         ATTACK_1, // geändertes g, um eine kleine Untergruppe zu erzwingen
         ATTACK_2, // ungeeignetes p
         ATTACK_3, // statischer privateKey über mehrere Sitzungen
-        ALL
     } 
+
+    public enum ValidationMode {
+        NONE,
+        VALIDATE
+    }
 
     // =========================================================================
     // FELDER DER KEYEXCHANGE-KLASSE
     // =========================================================================
     private Parameters parameters;
     private AttackType attackType;
-    private boolean validate;
+    private ValidationMode validationMode;
 
     private static final BigInteger STATIC_ALICE_PRIVATE_KEY = new BigInteger("1234567890ABCDEF1234567890ABCDEF", 16);
     private static final BigInteger STATIC_BOB_PRIVATE_KEY = new BigInteger("FEDCBA0987654321FEDCBA0987654321", 16);
@@ -36,7 +40,7 @@ public class KeyExchange {
     public KeyExchange() {
         this.parameters = Parameters.createStandard512Bit();
         this.attackType = AttackType.NONE;
-        this.validate = false;
+        this.validationMode = ValidationMode.NONE;
     }
 
     public KeyExchange setParameters(Parameters parameters) {
@@ -49,8 +53,8 @@ public class KeyExchange {
         return this;
     }
 
-    public KeyExchange setValidate(boolean wantValidation) {
-        this.validate = wantValidation;
+    public KeyExchange setValidationMode(ValidationMode validationMode) {
+        this.validationMode = validationMode;
         return this;
     }
 
@@ -61,21 +65,43 @@ public class KeyExchange {
         return this;
     }
 
-        // Neue Felder in KeyExchange.java:
     private BigInteger customBobPrivateKey = null;
     private byte[] lastBobSessionKey = null;
-    
+
     public KeyExchange setCustomBobPrivateKey(BigInteger key) {
         this.customBobPrivateKey = key;
         return this;
     }
-    
+
     public KeyExchange setBobPrivateKey(BigInteger key) {
         return setCustomBobPrivateKey(key);
     }
-    
+
     public byte[] getLastBobSessionKey() {
         return this.lastBobSessionKey;
+    }
+
+    /**
+     * Ermittelt den Rest (Bob's Private Key % SubgroupOrder) direkt aus dieser Sitzung.
+     * Berechnet die Untergruppenordnung automatisch.
+     */
+    public int deduceRemainder() {
+        if (injectedAttackerValue == null || lastBobSessionKey == null || parameters == null) {
+            throw new IllegalStateException("Sitzung wurde noch nicht ausgeführt oder erforderliche Werte fehlen.");
+        }
+        return deduceRemainder(injectedAttackerValue, parameters.modulus, lastBobSessionKey);
+    }
+
+    /**
+     * Ermittelt den Rest (Bob's Private Key % SubgroupOrder) direkt aus dieser Sitzung
+     * mit einer vorgegebenen Untergruppenordnung.
+     */
+    public int deduceRemainder(int subgroupOrder) {
+        if (injectedAttackerValue == null || lastBobSessionKey == null || parameters == null) {
+            throw new IllegalStateException("Sitzung wurde noch nicht ausgeführt oder erforderliche Werte fehlen.");
+
+        }
+        return deduceRemainder(injectedAttackerValue, subgroupOrder, parameters.modulus, lastBobSessionKey);
     }
 
     
@@ -86,7 +112,7 @@ public class KeyExchange {
     public void run() {
         System.out.println("Starte Diffie-Hellman-Schlüsselaustausch...");
         System.out.println("Angriffstyp: " + attackType);
-        System.out.println("Validierungsmodus: " + validate);
+        System.out.println("Validierungsmodus: " + validationMode);
         System.out.println("Verwendete Parameter: g = " + parameters.generator + ", p = " + parameters.modulus);
 
         try {
@@ -94,14 +120,12 @@ public class KeyExchange {
             Parameters activeParameters = this.parameters;
 
             // 1.1 ANGRIFF 2: p ist nicht prim
-            if (attackType == AttackType.ATTACK_2 || attackType == AttackType.ALL) {
+            if (attackType == AttackType.ATTACK_2) {
                 activeParameters = Parameters.createNonPrimeModulus();
             }
 
             // 1.2 VALIDIERUNG DER PARAMETER
-            if (validationMode == ValidationMode.VALIDATE 
-                    || validationMode == ValidationMode.VALIDATE_PARAMETERS 
-                    || validationMode == ValidationMode.BOTH) {
+            if (validationMode == ValidationMode.VALIDATE) {
                 Validator.validateParameters(activeParameters.modulus, activeParameters.generator);
             } else {
                 System.out.println("\n-> Keine Validierung der Gruppenparameter durchgeführt.");
@@ -111,7 +135,7 @@ public class KeyExchange {
             BigInteger alicePrivateKey, bobPrivateKey;
 
             // 2.1 ANGRIFF 3: Statische Schlüssel über mehrere Sitzungen
-            if (attackType == AttackType.ATTACK_3 || attackType == AttackType.ALL) {
+            if (attackType == AttackType.ATTACK_3) {
                 // Beispiel für einen Angriff: Verwende statische Schlüssel
                 alicePrivateKey = STATIC_ALICE_PRIVATE_KEY;
                 bobPrivateKey = (customBobPrivateKey != null) ? customBobPrivateKey : STATIC_BOB_PRIVATE_KEY;
@@ -122,8 +146,7 @@ public class KeyExchange {
             }
 
             // 2.2 VALIDIERUNG DER PRIVATEN SCHLÜSSEL
-            if (validationMode == ValidationMode.VALIDATE 
-                    || validationMode == ValidationMode.BOTH) {
+            if (validationMode == ValidationMode.VALIDATE) {
                 Validator.validatePrivateKey(alicePrivateKey, activeParameters.modulus, "Alice");
                 Validator.validatePrivateKey(bobPrivateKey, activeParameters.modulus, "Bob");
             } else {
@@ -142,7 +165,7 @@ public class KeyExchange {
             BigInteger bobReceivedPublicKey = alicePublicKey;
 
             // 3.1 ANGRIFF: MANIPULATION DER ÖFFENTLICHEN WERTE
-            if (attackType == AttackType.ATTACK_1 || attackType == AttackType.ATTACK_3 || attackType == AttackType.ALL) {
+            if (attackType == AttackType.ATTACK_1 || attackType == AttackType.ATTACK_3) {
                 
                 // Wenn ein spezieller Wert gesetzt wurde, nimm diesen. Sonst standardmäßig p-1.
                 BigInteger maliciousValue = (injectedAttackerValue != null) 
@@ -158,9 +181,7 @@ public class KeyExchange {
             }
 
             // 3.2 WERTEVALIDIERUNG VOR BERECHNUNG
-            if (validationMode == ValidationMode.VALIDATE 
-                    || validationMode == ValidationMode.VALIDATE_PUBLIC_VALUES 
-                    || validationMode == ValidationMode.BOTH) {
+            if (validationMode == ValidationMode.VALIDATE) {
                 Validator.validatePublicValue(aliceReceivedPublicKey, activeParameters.modulus, "Alice");
                 Validator.validatePublicValue(bobReceivedPublicKey, activeParameters.modulus, "Bob");
             } else {
@@ -197,72 +218,6 @@ public class KeyExchange {
         System.out.println("========================================================================\n");
     }
 
-    private void runDH() {
-        System.out.println("Starte Diffie-Hellman-Schlüsselaustausch...");
-        System.out.println("Angriffstyp: " + attackType);
-        System.out.println("Validierung aktiviert: " + validate);
-        
-        try {
-            // 1. Parameter auswaehlen und pruefen
-            Parameters activeParameters = setupParameters();
-            if (validate) {
-                Validator.validateParameters(activeParameters.modulus,activeParameters.generator);
-            } else {
-                System.out.println("Keine Prüfung der Parameter durchgeführt.");
-            }
-            
-            // 2. Private Schluessel erzeugen und pruefen
-            var privateKeys = generatePrivateKeys(activeParameters);
-            
-            if (validate) {
-                Validator.validatePrivateKey(alicePrivateKey, activeParameters.modulus, "Alice");
-                Validator.validatePrivateKey(bobPrivateKey, activeParameters.modulus, "Bob");
-            } else {
-                System.out.println("Keine Prüfung privater Schlüssel durchgeführt.");
-            }
-            // Parameter und private Schlüssel prüfen
-            
-            // Öffentliche Schlüssel berechnen
-            var publicKeys = generatePublicKeys(activeParameters, privateKeys);
-            
-            //Validieren privater Werte
-            
-
-            // Validieren oeffentlicher Werte
-            if (validate) {
-                Validator.validatePublicValue(
-                    aliceReceivedPublicKey, activeParameters.modulus, "Alice"
-                );
-                Validator.validatePublicValue(
-                    bobReceivedPublicKey, activeParameters.modulus, "Bob"
-                );
-            } else {
-                System.out.println("Keine Prüfung öffentlicher Werte durchgeführt.");
-            }
-
-            // Gemeinsames Geheimnis und Sitzungsschlüssel berechnen
-            var sessionKeys = calculateSessionKeys(activeParameters, privateKeys, receivedKeys);
-            // Angreifer manipuliert ggf. die übertragenen Werte
-            var receivedKeys = simulateAttacker(activeParameters, publicKeys);
-
-            // Empfangene Werte prüfen
-
-            printResults(sessionKeys);
-
-        } catch (SecurityException e) {
-            System.out.println("Schlüsselaustausch abgebrochen: " + e.getMessage());
-    }
-}
-// Auslagerungen der Main
-    private Parameters setupParameters() {
-        switch (attackType) {
-            case AttackType.ATTACK_2, AttackType.ALL:
-                return Parameters.createNonPrimeModulus();
-            default:
-                return this.parameters;
-        }
-    }
-    
     public static byte[] deriveSHA256Key(BigInteger secret) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
@@ -281,58 +236,39 @@ public class KeyExchange {
         return hex;
     }
 
-    public static void simulateAttack3CRT() {
-        simulateAttack3CRT(13);
-    }
+    // =========================================================================
+    // ANGRIFF 3: UNTERGRUPPEN-REKONSTRUKTION & CRT
+    // =========================================================================
 
-    public static void simulateAttack3CRT(int secretBobKey) {
-        simulateAttack3CRT(BigInteger.valueOf(secretBobKey));
-    }
-
-    public static void simulateAttack3CRT(BigInteger secretBobKey) {
+    public static void simulateAttack3CRT(BigInteger secretBobKey, ValidationMode validationMode) {
         // Setup für die Demo: p = 31 (damit p - 1 = 30 = 2 * 3 * 5), g = 3
         Parameters demoParams = new Parameters(3, 31);
+        int[] injectedValues = {30, 25, 16};
+        int[] subgroupOrders = {2, 3, 5};
+        int[] remainders = new int[3];
 
-        System.out.println("\n--- SITZUNG 1 (Angreifer sendet 30, erzeugt 2er Gruppe) ---");
-        BigInteger fake1 = BigInteger.valueOf(30L);
-        KeyExchange session1 = new KeyExchange()
-            .setParameters(demoParams)
-            .setCustomBobPrivateKey(secretBobKey)
-            .setAttackType(KeyExchange.AttackType.ATTACK_3)
-            .setValidationMode(KeyExchange.ValidationMode.NONE)
-            .setInjectedAttackerValue(fake1);
-        session1.run();
-        int rest2 = deduceRemainder(fake1, demoParams.modulus, session1.getLastBobSessionKey());
+        for (int i = 0; i < injectedValues.length; i++) {
+            System.out.printf("\n--- SITZUNG %d (Angreifer sendet %d, erzeugt %der Gruppe) ---\n",
+                    i + 1, injectedValues[i], subgroupOrders[i]);
 
-        System.out.println("\n--- SITZUNG 2 (Angreifer sendet 25, erzeugt 3er Gruppe) ---");
-        BigInteger fake2 = BigInteger.valueOf(25L);
-        KeyExchange session2 = new KeyExchange()
-            .setParameters(demoParams)
-            .setCustomBobPrivateKey(secretBobKey)
-            .setAttackType(KeyExchange.AttackType.ATTACK_3)
-            .setValidationMode(KeyExchange.ValidationMode.NONE)
-            .setInjectedAttackerValue(fake2);
-        session2.run();
-        int rest3 = deduceRemainder(fake2, demoParams.modulus, session2.getLastBobSessionKey());
+            KeyExchange session = new KeyExchange()
+                .setParameters(demoParams)
+                .setBobPrivateKey(secretBobKey)
+                .setAttackType(AttackType.ATTACK_3)
+                .setValidationMode(validationMode)
+                .setInjectedAttackerValue(BigInteger.valueOf(injectedValues[i]));
+            session.run();
 
-        System.out.println("\n--- SITZUNG 3 (Angreifer sendet 16, erzeugt 5er Gruppe) ---");
-        BigInteger fake3 = BigInteger.valueOf(16L);
-        KeyExchange session3 = new KeyExchange()
-            .setParameters(demoParams)
-            .setCustomBobPrivateKey(secretBobKey)
-            .setAttackType(KeyExchange.AttackType.ATTACK_3)
-            .setValidationMode(KeyExchange.ValidationMode.NONE)
-            .setInjectedAttackerValue(fake3);
-        session3.run();
-        int rest5 = deduceRemainder(fake3, demoParams.modulus, session3.getLastBobSessionKey());
+            remainders[i] = session.deduceRemainder(subgroupOrders[i]);
+        }
 
         System.out.println("\n [ANGRIFF 3 - FINALE] Chinesischer Restsatz wird angewendet...");
         System.out.println("Angreifer weiß nun:");
-        System.out.println("Bob's Private Key % 2 = " + rest2);
-        System.out.println("Bob's Private Key % 3 = " + rest3);
-        System.out.println("Bob's Private Key % 5 = " + rest5);
+        for (int i = 0; i < remainders.length; i++) {
+            System.out.println("Bob's Private Key % " + subgroupOrders[i] + " = " + remainders[i]);
+        }
 
-        BigInteger recovered = solveCRT(new int[]{rest2, rest3, rest5}, new int[]{2, 3, 5});
+        BigInteger recovered = solveCRT(remainders, subgroupOrders);
         System.out.println("==> BINGO! Der Angreifer hat Bobs statischen privaten Schlüssel berechnet: " + recovered);
     }
 
@@ -367,10 +303,16 @@ public class KeyExchange {
         throw new IllegalStateException("Kein passender Rest in der Untergruppe gefunden.");
     }
 
+    /**
+     * Kompatibilitätsmethode für bestehende Aufrufe (z.B. aus dem Notebook).
+     */
     public static int determineRemainderFromSession(KeyExchange session, BigInteger injectedValue, int subgroupOrder, BigInteger p) {
         return deduceRemainder(injectedValue, subgroupOrder, p, session.getLastBobSessionKey());
     }
 
+    /**
+     * Kompatibilitätsmethode für bestehende Aufrufe (z.B. aus dem Notebook).
+     */
     public static int determineRemainderFromSession(KeyExchange session, BigInteger injectedValue, BigInteger p) {
         return deduceRemainder(injectedValue, p, session.getLastBobSessionKey());
     }
@@ -394,9 +336,4 @@ public class KeyExchange {
         }
         return BigInteger.valueOf(-1);
     }
-
-    public static void main(String[] args) {
-        simulateAttack3CRT();
-    }
-
 }
