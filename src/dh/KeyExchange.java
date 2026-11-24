@@ -69,22 +69,43 @@ public class KeyExchange {
         return this;
     }
 
-    // Neue Felder in KeyExchange.java:
-private BigInteger customBobPrivateKey = null;
-private byte[] lastBobSessionKey = null;
+    private BigInteger customBobPrivateKey = null;
+    private byte[] lastBobSessionKey = null;
 
-public KeyExchange setCustomBobPrivateKey(BigInteger key) {
-    this.customBobPrivateKey = key;
-    return this;
-}
+    public KeyExchange setCustomBobPrivateKey(BigInteger key) {
+        this.customBobPrivateKey = key;
+        return this;
+    }
 
-public KeyExchange setBobPrivateKey(BigInteger key) {
-    return setCustomBobPrivateKey(key);
-}
+    public KeyExchange setBobPrivateKey(BigInteger key) {
+        return setCustomBobPrivateKey(key);
+    }
 
-public byte[] getLastBobSessionKey() {
-    return this.lastBobSessionKey;
-}
+    public byte[] getLastBobSessionKey() {
+        return this.lastBobSessionKey;
+    }
+
+    /**
+     * Ermittelt den Rest (Bob's Private Key % SubgroupOrder) direkt aus dieser Sitzung.
+     * Berechnet die Untergruppenordnung automatisch.
+     */
+    public int deduceRemainder() {
+        if (injectedAttackerValue == null || lastBobSessionKey == null || parameters == null) {
+            throw new IllegalStateException("Sitzung wurde noch nicht ausgeführt oder erforderliche Werte fehlen.");
+        }
+        return deduceRemainder(injectedAttackerValue, parameters.modulus, lastBobSessionKey);
+    }
+
+    /**
+     * Ermittelt den Rest (Bob's Private Key % SubgroupOrder) direkt aus dieser Sitzung
+     * mit einer vorgegebenen Untergruppenordnung.
+     */
+    public int deduceRemainder(int subgroupOrder) {
+        if (injectedAttackerValue == null || lastBobSessionKey == null || parameters == null) {
+            throw new IllegalStateException("Sitzung wurde noch nicht ausgeführt oder erforderliche Werte fehlen.");
+        }
+        return deduceRemainder(injectedAttackerValue, subgroupOrder, parameters.modulus, lastBobSessionKey);
+    }
 
     
 
@@ -223,58 +244,39 @@ public byte[] getLastBobSessionKey() {
         return hex;
     }
 
-    public static void simulateAttack3CRT() {
-        simulateAttack3CRT(13);
-    }
-
-    public static void simulateAttack3CRT(int secretBobKey) {
-        simulateAttack3CRT(BigInteger.valueOf(secretBobKey));
-    }
+    // =========================================================================
+    // ANGRIFF 3: UNTERGRUPPEN-REKONSTRUKTION & CRT
+    // =========================================================================
 
     public static void simulateAttack3CRT(BigInteger secretBobKey) {
         // Setup für die Demo: p = 31 (damit p - 1 = 30 = 2 * 3 * 5), g = 3
         Parameters demoParams = new Parameters(3, 31);
+        int[] injectedValues = {30, 25, 16};
+        int[] subgroupOrders = {2, 3, 5};
+        int[] remainders = new int[3];
 
-        System.out.println("\n--- SITZUNG 1 (Angreifer sendet 30, erzeugt 2er Gruppe) ---");
-        BigInteger fake1 = BigInteger.valueOf(30L);
-        KeyExchange session1 = new KeyExchange()
-            .setParameters(demoParams)
-            .setCustomBobPrivateKey(secretBobKey)
-            .setAttackType(KeyExchange.AttackType.ATTACK_3)
-            .setValidationMode(KeyExchange.ValidationMode.NONE)
-            .setInjectedAttackerValue(fake1);
-        session1.run();
-        int rest2 = deduceRemainder(fake1, demoParams.modulus, session1.getLastBobSessionKey());
+        for (int i = 0; i < injectedValues.length; i++) {
+            System.out.printf("\n--- SITZUNG %d (Angreifer sendet %d, erzeugt %der Gruppe) ---\n",
+                    i + 1, injectedValues[i], subgroupOrders[i]);
 
-        System.out.println("\n--- SITZUNG 2 (Angreifer sendet 25, erzeugt 3er Gruppe) ---");
-        BigInteger fake2 = BigInteger.valueOf(25L);
-        KeyExchange session2 = new KeyExchange()
-            .setParameters(demoParams)
-            .setCustomBobPrivateKey(secretBobKey)
-            .setAttackType(KeyExchange.AttackType.ATTACK_3)
-            .setValidationMode(KeyExchange.ValidationMode.NONE)
-            .setInjectedAttackerValue(fake2);
-        session2.run();
-        int rest3 = deduceRemainder(fake2, demoParams.modulus, session2.getLastBobSessionKey());
+            KeyExchange session = new KeyExchange()
+                .setParameters(demoParams)
+                .setBobPrivateKey(secretBobKey)
+                .setAttackType(AttackType.ATTACK_3)
+                .setValidationMode(ValidationMode.NONE)
+                .setInjectedAttackerValue(BigInteger.valueOf(injectedValues[i]));
+            session.run();
 
-        System.out.println("\n--- SITZUNG 3 (Angreifer sendet 16, erzeugt 5er Gruppe) ---");
-        BigInteger fake3 = BigInteger.valueOf(16L);
-        KeyExchange session3 = new KeyExchange()
-            .setParameters(demoParams)
-            .setCustomBobPrivateKey(secretBobKey)
-            .setAttackType(KeyExchange.AttackType.ATTACK_3)
-            .setValidationMode(KeyExchange.ValidationMode.NONE)
-            .setInjectedAttackerValue(fake3);
-        session3.run();
-        int rest5 = deduceRemainder(fake3, demoParams.modulus, session3.getLastBobSessionKey());
+            remainders[i] = session.deduceRemainder(subgroupOrders[i]);
+        }
 
         System.out.println("\n [ANGRIFF 3 - FINALE] Chinesischer Restsatz wird angewendet...");
         System.out.println("Angreifer weiß nun:");
-        System.out.println("Bob's Private Key % 2 = " + rest2);
-        System.out.println("Bob's Private Key % 3 = " + rest3);
-        System.out.println("Bob's Private Key % 5 = " + rest5);
+        for (int i = 0; i < remainders.length; i++) {
+            System.out.println("Bob's Private Key % " + subgroupOrders[i] + " = " + remainders[i]);
+        }
 
-        BigInteger recovered = solveCRT(new int[]{rest2, rest3, rest5}, new int[]{2, 3, 5});
+        BigInteger recovered = solveCRT(remainders, subgroupOrders);
         System.out.println("==> BINGO! Der Angreifer hat Bobs statischen privaten Schlüssel berechnet: " + recovered);
     }
 
@@ -309,10 +311,16 @@ public byte[] getLastBobSessionKey() {
         throw new IllegalStateException("Kein passender Rest in der Untergruppe gefunden.");
     }
 
+    /**
+     * Kompatibilitätsmethode für bestehende Aufrufe (z.B. aus dem Notebook).
+     */
     public static int determineRemainderFromSession(KeyExchange session, BigInteger injectedValue, int subgroupOrder, BigInteger p) {
         return deduceRemainder(injectedValue, subgroupOrder, p, session.getLastBobSessionKey());
     }
 
+    /**
+     * Kompatibilitätsmethode für bestehende Aufrufe (z.B. aus dem Notebook).
+     */
     public static int determineRemainderFromSession(KeyExchange session, BigInteger injectedValue, BigInteger p) {
         return deduceRemainder(injectedValue, p, session.getLastBobSessionKey());
     }
@@ -338,7 +346,7 @@ public byte[] getLastBobSessionKey() {
     }
 
     public static void main(String[] args) {
-        simulateAttack3CRT();
+        simulateAttack3CRT(BigInteger.valueOf(13));
     }
 
 }
