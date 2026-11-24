@@ -106,7 +106,7 @@ Die verbreitetste Variante, um mit Angriffen wie einem Man-in-the-Middle-Angriff
 Trotz Zertifikaten oder Signaturen eine Parameterprfung zu haben schadet aber offensichtlicherweise nicht, für den Fall, dass das gewählte Medium dennoch auf irgendeine Art und Weise unsicher ist. So kann dann immernoch gegen bösartig gewählte Parameter geschützt werden.
 
 ### 4. Forward Secrecy
-Forward Secrecy ist hier keine, sondern schützt vergangene Kommunikation vor nachträglicher Entschlüsselung. Das bedeutet im Regelfall, dass zum Beispiel bei ECDHE im Gegensatz zum normalen Diffie-Hellman für jede Sitzung neue Schlüssel erzeugt werden. Dadurch kann, selbst wenn ein Schlüssel kompromittiert wird, mit diesem dann nur die Nachrichten der momentanen Sitzung ausgelsen werden, da die älteren Sitzungen andere, unabhängige Schlüssel verwedeten.
+Forward Secrecy ist keine Präventivmaßnahme, sondern schützt vergangene Kommunikation vor nachträglicher Entschlüsselung. Das bedeutet im Regelfall, dass zum Beispiel bei ECDHE im Gegensatz zum normalen Diffie-Hellman für jede Sitzung neue Schlüssel erzeugt werden. Dadurch kann, selbst wenn ein Schlüssel kompromittiert wird, mit diesem dann nur die Nachrichten der momentanen Sitzung ausgelsen werden, da die älteren Sitzungen andere, unabhängige Schlüssel verwedeten.
 
 ### 5. Restrisiken
 Selbst wenn nun das Verfahren so gut wie mögich durchgeführt wird, gibt es aber immernoch andere Arten, wie die Kommunikation hier Angegriffen werden kann.
