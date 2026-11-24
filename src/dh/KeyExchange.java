@@ -19,20 +19,12 @@ public class KeyExchange {
         ALL
     } 
 
-    public enum ValidationMode {
-        NONE,
-        VALIDATE,
-        VALIDATE_PARAMETERS,
-        VALIDATE_PUBLIC_VALUES,
-        BOTH
-    }
-
     // =========================================================================
     // FELDER DER KEYEXCHANGE-KLASSE
     // =========================================================================
     private Parameters parameters;
     private AttackType attackType;
-    private ValidationMode validationMode;
+    private boolean validate;
 
     private static final BigInteger STATIC_ALICE_PRIVATE_KEY = new BigInteger("1234567890ABCDEF1234567890ABCDEF", 16);
     private static final BigInteger STATIC_BOB_PRIVATE_KEY = new BigInteger("FEDCBA0987654321FEDCBA0987654321", 16);
@@ -44,7 +36,7 @@ public class KeyExchange {
     public KeyExchange() {
         this.parameters = Parameters.createStandard512Bit();
         this.attackType = AttackType.NONE;
-        this.validationMode = ValidationMode.NONE;
+        this.validate = false;
     }
 
     public KeyExchange setParameters(Parameters parameters) {
@@ -57,8 +49,8 @@ public class KeyExchange {
         return this;
     }
 
-    public KeyExchange setValidationMode(ValidationMode validationMode) {
-        this.validationMode = validationMode;
+    public KeyExchange setValidate(boolean wantValidation) {
+        this.validate = wantValidation;
         return this;
     }
 
@@ -69,22 +61,22 @@ public class KeyExchange {
         return this;
     }
 
-    // Neue Felder in KeyExchange.java:
-private BigInteger customBobPrivateKey = null;
-private byte[] lastBobSessionKey = null;
-
-public KeyExchange setCustomBobPrivateKey(BigInteger key) {
-    this.customBobPrivateKey = key;
-    return this;
-}
-
-public KeyExchange setBobPrivateKey(BigInteger key) {
-    return setCustomBobPrivateKey(key);
-}
-
-public byte[] getLastBobSessionKey() {
-    return this.lastBobSessionKey;
-}
+        // Neue Felder in KeyExchange.java:
+    private BigInteger customBobPrivateKey = null;
+    private byte[] lastBobSessionKey = null;
+    
+    public KeyExchange setCustomBobPrivateKey(BigInteger key) {
+        this.customBobPrivateKey = key;
+        return this;
+    }
+    
+    public KeyExchange setBobPrivateKey(BigInteger key) {
+        return setCustomBobPrivateKey(key);
+    }
+    
+    public byte[] getLastBobSessionKey() {
+        return this.lastBobSessionKey;
+    }
 
     
 
@@ -94,7 +86,7 @@ public byte[] getLastBobSessionKey() {
     public void run() {
         System.out.println("Starte Diffie-Hellman-Schlüsselaustausch...");
         System.out.println("Angriffstyp: " + attackType);
-        System.out.println("Validierungsmodus: " + validationMode);
+        System.out.println("Validierungsmodus: " + validate);
         System.out.println("Verwendete Parameter: g = " + parameters.generator + ", p = " + parameters.modulus);
 
         try {
@@ -205,6 +197,72 @@ public byte[] getLastBobSessionKey() {
         System.out.println("========================================================================\n");
     }
 
+    private void runDH() {
+        System.out.println("Starte Diffie-Hellman-Schlüsselaustausch...");
+        System.out.println("Angriffstyp: " + attackType);
+        System.out.println("Validierung aktiviert: " + validate);
+        
+        try {
+            // 1. Parameter auswaehlen und pruefen
+            Parameters activeParameters = setupParameters();
+            if (validate) {
+                Validator.validateParameters(activeParameters.modulus,activeParameters.generator);
+            } else {
+                System.out.println("Keine Prüfung der Parameter durchgeführt.");
+            }
+            
+            // 2. Private Schluessel erzeugen und pruefen
+            var privateKeys = generatePrivateKeys(activeParameters);
+            
+            if (validate) {
+                Validator.validatePrivateKey(alicePrivateKey, activeParameters.modulus, "Alice");
+                Validator.validatePrivateKey(bobPrivateKey, activeParameters.modulus, "Bob");
+            } else {
+                System.out.println("Keine Prüfung privater Schlüssel durchgeführt.");
+            }
+            // Parameter und private Schlüssel prüfen
+            
+            // Öffentliche Schlüssel berechnen
+            var publicKeys = generatePublicKeys(activeParameters, privateKeys);
+            
+            //Validieren privater Werte
+            
+
+            // Validieren oeffentlicher Werte
+            if (validate) {
+                Validator.validatePublicValue(
+                    aliceReceivedPublicKey, activeParameters.modulus, "Alice"
+                );
+                Validator.validatePublicValue(
+                    bobReceivedPublicKey, activeParameters.modulus, "Bob"
+                );
+            } else {
+                System.out.println("Keine Prüfung öffentlicher Werte durchgeführt.");
+            }
+
+            // Gemeinsames Geheimnis und Sitzungsschlüssel berechnen
+            var sessionKeys = calculateSessionKeys(activeParameters, privateKeys, receivedKeys);
+            // Angreifer manipuliert ggf. die übertragenen Werte
+            var receivedKeys = simulateAttacker(activeParameters, publicKeys);
+
+            // Empfangene Werte prüfen
+
+            printResults(sessionKeys);
+
+        } catch (SecurityException e) {
+            System.out.println("Schlüsselaustausch abgebrochen: " + e.getMessage());
+    }
+}
+// Auslagerungen der Main
+    private Parameters setupParameters() {
+        switch (attackType) {
+            case AttackType.ATTACK_2, AttackType.ALL:
+                return Parameters.createNonPrimeModulus();
+            default:
+                return this.parameters;
+        }
+    }
+    
     public static byte[] deriveSHA256Key(BigInteger secret) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
