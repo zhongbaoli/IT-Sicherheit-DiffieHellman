@@ -131,115 +131,6 @@ public class KeyExchange {
     public void run() {
         System.out.println("Starte Diffie-Hellman-Schlüsselaustausch...");
         System.out.println("Angriffstyp: " + attackType);
-        System.out.println("Validierungsmodus: " + validate);
-        System.out.println("Verwendete Parameter: g = " + parameters.generator + ", p = " + parameters.modulus);
-
-        try {
-            // 1. SETUP DER PARAMETER
-            Parameters activeParameters = this.parameters;
-
-            // 1.1 ANGRIFF 2: p ist nicht prim
-            if (attackType == AttackType.ATTACK_2) {
-                activeParameters = Parameters.createNonPrimeModulus();
-            }
-
-            // 1.2 VALIDIERUNG DER PARAMETER
-            if (validationMode == ValidationMode.VALIDATE) {
-                Validator.validateParameters(activeParameters.modulus, activeParameters.generator);
-            } else {
-                System.out.println("\n-> Keine Validierung der Gruppenparameter durchgeführt.");
-            }
-
-            // 2. SCHLÜSSELGENERIERUNG
-            BigInteger alicePrivateKey, bobPrivateKey;
-
-            // 2.1 ANGRIFF 3: Statische Schlüssel über mehrere Sitzungen
-            if (attackType == AttackType.ATTACK_3) {
-                // Beispiel für einen Angriff: Verwende statische Schlüssel
-                alicePrivateKey = STATIC_ALICE_PRIVATE_KEY;
-                bobPrivateKey = (customBobPrivateKey != null) ? customBobPrivateKey : STATIC_BOB_PRIVATE_KEY;
-            } else {
-                SecureRandom random = new SecureRandom();
-                alicePrivateKey = new BigInteger(activeParameters.modulus.bitLength() - 1, random);
-                bobPrivateKey = new BigInteger(activeParameters.modulus.bitLength() - 1, random);
-            }
-
-            // 2.2 VALIDIERUNG DER PRIVATEN SCHLÜSSEL
-            if (validationMode == ValidationMode.VALIDATE) {
-                Validator.validatePrivateKey(alicePrivateKey, activeParameters.modulus, "Alice");
-                Validator.validatePrivateKey(bobPrivateKey, activeParameters.modulus, "Bob");
-            } else {
-                System.out.println("\n-> Keine Validierung der privaten Schlüssel durchgeführt.");
-            }
-            
-            // 3. BERECHNUNG DER ÖFFENTLICHEN WERTE
-            BigInteger alicePublicKey = activeParameters.generator.modPow(alicePrivateKey, activeParameters.modulus);
-            BigInteger bobPublicKey = activeParameters.generator.modPow(bobPrivateKey, activeParameters.modulus);
-
-            System.out.println("\n[Schlüsselerzeugung]");
-            System.out.println("  • Alices öffentlicher Wert A: " + truncateHex(alicePublicKey));
-            System.out.println("  • Bobs öffentlicher Wert B:   " + truncateHex(bobPublicKey));
-
-            BigInteger aliceReceivedPublicKey = bobPublicKey;
-            BigInteger bobReceivedPublicKey = alicePublicKey;
-
-            // 3.1 ANGRIFF: MANIPULATION DER ÖFFENTLICHEN WERTE
-            if (attackType == AttackType.ATTACK_1 || attackType == AttackType.ATTACK_3) {
-                
-                // Wenn ein spezieller Wert gesetzt wurde, nimm diesen. Sonst standardmäßig p-1.
-                BigInteger maliciousValue = (injectedAttackerValue != null) 
-                                            ? injectedAttackerValue 
-                                            : activeParameters.modulus.subtract(BigInteger.ONE);
-                
-                // Angreifer fängt Werte ab und sendet seinen manipulierten Wert an Bob & Alice
-                bobReceivedPublicKey = maliciousValue;
-                aliceReceivedPublicKey = maliciousValue;
-                
-                System.out.println("\n[ANGRIFF] Angreifer fängt den Schlüsselaustausch ab!");
-                System.out.println(" [ANGRIFF] Er sendet stattdessen " + maliciousValue + " an die Parteien.");
-            }
-
-            // 3.2 WERTEVALIDIERUNG VOR BERECHNUNG
-            if (validationMode == ValidationMode.VALIDATE) {
-                Validator.validatePublicValue(aliceReceivedPublicKey, activeParameters.modulus, "Alice");
-                Validator.validatePublicValue(bobReceivedPublicKey, activeParameters.modulus, "Bob");
-            } else {
-                System.out.println("\n-> Keine Validierung der öffentlichen Werte durchgeführt.");
-            }
-
-            // 4. GEHEIMNISBERECHNUNG
-            BigInteger aliceRawSecret = aliceReceivedPublicKey.modPow(alicePrivateKey, activeParameters.modulus);
-            BigInteger bobRawSecret = bobReceivedPublicKey.modPow(bobPrivateKey, activeParameters.modulus);
-
-            byte[] aliceKey = deriveSHA256Key(aliceRawSecret);
-            byte[] bobKey   = deriveSHA256Key(bobRawSecret);
-
-            this.lastBobSessionKey = bobKey; // Speichere Bobs Sitzungsschlüssel für mögliche spätere Angriffe
-
-            System.out.println("\n[Ergebnisse]");
-            System.out.println("  • Alices rohes K: " + truncateHex(aliceRawSecret));
-            System.out.println("  • Bobs rohes K:   " + truncateHex(bobRawSecret));
-            System.out.println("  • Alices Sitzungsschlüssel: " + HexFormat.of().formatHex(aliceKey));
-            System.out.println("  • Bobs Sitzungsschlüssel:   " + HexFormat.of().formatHex(bobKey));
-
-            boolean keysMatch = MessageDigest.isEqual(aliceKey, bobKey);
-            System.out.println("\n==> Ergebnis: Sitzungsschlüssel stimmen überein? " + keysMatch);
-
-            if (attackType == AttackType.ATTACK_1 && validationMode == ValidationMode.NONE) {
-                System.out.println("[ANGRIFF] Angriff 2 war erfolgreich! Das Geheimnis K wurde auf den festen Wert " + aliceRawSecret + " gezwungen!");
-            }
-            
-        } catch (SecurityException e) {
-            System.out.println("\n SCHUTZMECHANISMUS GREIFT:");
-            System.out.println("   " + e.getMessage());
-            System.out.println("==> Der Schlüsselaustausch wurde sicher abgebrochen.");
-        }
-        System.out.println("========================================================================\n");
-    }
-
-    public void runDH() {
-        System.out.println("Starte Diffie-Hellman-Schlüsselaustausch...");
-        System.out.println("Angriffstyp: " + attackType);
         System.out.println("Validierung aktiviert: " + validate);
 
         try {
@@ -252,22 +143,16 @@ public class KeyExchange {
             validatePrivateKeys(privateKeys, activeParameters);
 
             // 3. Öffentliche Schlüssel berechnen
-            PublicKeys publicKeys = generatePublicKeys(
-                privateKeys, activeParameters
-            );
+            PublicKeys publicKeys = generatePublicKeys(privateKeys, activeParameters);
 
             // 4. Möglichen Angriff simulieren
-            ReceivedKeys receivedKeys = simulateAttacker(
-                publicKeys, activeParameters
-            );
+            ReceivedKeys receivedKeys = simulateAttacker(publicKeys, activeParameters);
 
             // 5. Empfangene Werte prüfen
             validateReceivedKeys(receivedKeys, activeParameters);
 
             // 6. Sitzungsschlüssel berechnen
-            SessionResult result = calculateSessionKeys(
-                privateKeys, receivedKeys, activeParameters
-            );
+            SessionResult result = calculateSessionKeys(privateKeys, receivedKeys, activeParameters);
 
             // 7. Ergebnisse ausgeben
             printResults(result);
@@ -310,8 +195,7 @@ public class KeyExchange {
         BigInteger alicePrivateKey;
         BigInteger bobPrivateKey;
 
-        if (attackType == AttackType.ATTACK_3
-                || attackType == AttackType.ALL) {
+        if (attackType == AttackType.ATTACK_3) {
 
             alicePrivateKey = STATIC_ALICE_PRIVATE_KEY;
             bobPrivateKey = (customBobPrivateKey != null)
@@ -333,9 +217,7 @@ public class KeyExchange {
         return new PrivateKeys(alicePrivateKey, bobPrivateKey);
     }
 
-    private void validatePrivateKeys(
-            PrivateKeys privateKeys,
-            Parameters params) {
+    private void validatePrivateKeys(PrivateKeys privateKeys, Parameters params) {
 
         if (validate) {
             Validator.validatePrivateKey(
@@ -350,22 +232,15 @@ public class KeyExchange {
         }
     }
 
-    private PublicKeys generatePublicKeys(
-            PrivateKeys privateKeys,
-            Parameters params) {
+    private PublicKeys generatePublicKeys(PrivateKeys privateKeys, Parameters params) {
 
-        BigInteger alicePublicKey = params.generator.modPow(
-            privateKeys.alice(), params.modulus
-        );
-
-        BigInteger bobPublicKey = params.generator.modPow(
-            privateKeys.bob(), params.modulus
-        );
+        BigInteger alicePublicKey = params.generator.modPow(privateKeys.alice(), params.modulus);
+        BigInteger bobPublicKey = params.generator.modPow(privateKeys.bob(), params.modulus);
 
         System.out.println("\n[Schlüsselerzeugung]");
-        System.out.println("  • Alices öffentlicher Wert A: "
+        System.out.println(" Alices öffentlicher Wert A: "
             + truncateHex(alicePublicKey));
-        System.out.println("  • Bobs öffentlicher Wert B:   "
+        System.out.println(" Bobs öffentlicher Wert B: "
             + truncateHex(bobPublicKey));
 
         return new PublicKeys(alicePublicKey, bobPublicKey);
@@ -378,25 +253,19 @@ public class KeyExchange {
         BigInteger aliceReceived = publicKeys.bob();
         BigInteger bobReceived = publicKeys.alice();
 
-        switch (attackType) {
-            case ATTACK_1, ATTACK_3, ALL -> {
-                BigInteger maliciousValue = (injectedAttackerValue != null)
+        if (attackType == AttackType.ATTACK_1 || attackType == AttackType.ATTACK_3) {
+            BigInteger maliciousValue = (injectedAttackerValue != null)
                     ? injectedAttackerValue
                     : params.modulus.subtract(BigInteger.ONE);
 
                 aliceReceived = maliciousValue;
                 bobReceived = maliciousValue;
 
-                System.out.println("\n[ANGRIFF] Öffentliche Werte manipuliert!");
-                System.out.println(" [ANGRIFF] Eingeschleuster Wert: "
+                System.out.println();
+                System.out.println("[ANGRIFF] Öffentliche Werte manipuliert!");
+                System.out.println("[ANGRIFF] Eingeschleuster Wert: "
                     + maliciousValue);
-            }
-
-            default -> {
-                // Keine Manipulation der öffentlichen Werte
-            }
         }
-
         return new ReceivedKeys(aliceReceived, bobReceived);
     }
 
@@ -405,26 +274,15 @@ public class KeyExchange {
             Parameters params) {
 
         if (validate) {
-            Validator.validatePublicValue(
-                receivedKeys.receivedByAlice(),
-                params.modulus,
-                "Alice"
-            );
-
-            Validator.validatePublicValue(
-                receivedKeys.receivedByBob(),
-                params.modulus,
-                "Bob"
-            );
+            Validator.validatePublicValue(receivedKeys.receivedByAlice(),params.modulus,"Alice");
+            Validator.validatePublicValue(receivedKeys.receivedByBob(), params.modulus, "Bob");
         } else {
-            System.out.println("\n-> Keine Validierung der öffentlichen Werte durchgeführt.");
+            System.out.println();
+            System.out.println("-> Keine Validierung der öffentlichen Werte durchgeführt.");
         }
     }
 
-    private SessionResult calculateSessionKeys(
-            PrivateKeys privateKeys,
-            ReceivedKeys receivedKeys,
-            Parameters params) {
+    private SessionResult calculateSessionKeys(PrivateKeys privateKeys, ReceivedKeys receivedKeys, Parameters params) {
 
         BigInteger aliceRawSecret =
             receivedKeys.receivedByAlice().modPow(
@@ -448,18 +306,20 @@ public class KeyExchange {
     }
 
     private void printResults(SessionResult result) {
-        System.out.println("\n[Ergebnisse]");
+        System.out.println("");
+        System.out.println("");
+        System.out.println("Ergebnisse");
 
-        System.out.println("  • Alices rohes K: "
+        System.out.println("Alices rohes K: "
             + truncateHex(result.aliceRawSecret()));
 
-        System.out.println("  • Bobs rohes K:   "
+        System.out.println("Bobs rohes K:   "
             + truncateHex(result.bobRawSecret()));
 
-        System.out.println("  • Alices Sitzungsschlüssel: "
+        System.out.println("Alices Sitzungsschlüssel: "
             + HexFormat.of().formatHex(result.aliceKey()));
 
-        System.out.println("  • Bobs Sitzungsschlüssel:   "
+        System.out.println("Bobs Sitzungsschlüssel:   "
             + HexFormat.of().formatHex(result.bobKey()));
 
         boolean keysMatch = MessageDigest.isEqual(
@@ -467,15 +327,11 @@ public class KeyExchange {
             result.bobKey()
         );
 
-        System.out.println(
-            "\n==> Ergebnis: Sitzungsschlüssel stimmen überein? "
-            + keysMatch
-        );
+        System.out.println("");
+        System.out.println("==> Ergebnis: Sitzungsschlüssel stimmen überein? " + keysMatch);
 
         if (attackType == AttackType.ATTACK_1 && !validate) {
-            System.out.println(
-                "[ANGRIFF] Die empfangenen öffentlichen Werte wurden manipuliert."
-            );
+            System.out.println("ANGRIFF Die empfangenen öffentlichen Werte wurden manipuliert.");
         }
     }
     
@@ -501,7 +357,7 @@ public class KeyExchange {
     // ANGRIFF 3: UNTERGRUPPEN-REKONSTRUKTION & CRT
     // =========================================================================
 
-    public static void simulateAttack3CRT(BigInteger secretBobKey, ValidationMode validationMode) {
+    public static void simulateAttack3CRT(BigInteger secretBobKey, boolean validate) {
         // Setup für die Demo: p = 31 (damit p - 1 = 30 = 2 * 3 * 5), g = 3
         Parameters demoParams = new Parameters(3, 31);
         int[] injectedValues = {30, 25, 16};
@@ -516,7 +372,7 @@ public class KeyExchange {
                 .setParameters(demoParams)
                 .setBobPrivateKey(secretBobKey)
                 .setAttackType(AttackType.ATTACK_3)
-                .setValidationMode(validationMode)
+                .setValidate(validate)
                 .setInjectedAttackerValue(BigInteger.valueOf(injectedValues[i]));
             session.run();
 
