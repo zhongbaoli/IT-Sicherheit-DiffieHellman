@@ -16,15 +16,11 @@ public class KeyExchange {
         ATTACK_1, // geändertes g, um eine kleine Untergruppe zu erzwingen
         ATTACK_2, // ungeeignetes p
         ATTACK_3, // statischer privateKey über mehrere Sitzungen
-        ALL
     } 
 
     public enum ValidationMode {
         NONE,
-        VALIDATE,
-        VALIDATE_PARAMETERS,
-        VALIDATE_PUBLIC_VALUES,
-        BOTH
+        VALIDATE
     }
 
     // =========================================================================
@@ -103,6 +99,7 @@ public class KeyExchange {
     public int deduceRemainder(int subgroupOrder) {
         if (injectedAttackerValue == null || lastBobSessionKey == null || parameters == null) {
             throw new IllegalStateException("Sitzung wurde noch nicht ausgeführt oder erforderliche Werte fehlen.");
+
         }
         return deduceRemainder(injectedAttackerValue, subgroupOrder, parameters.modulus, lastBobSessionKey);
     }
@@ -123,14 +120,12 @@ public class KeyExchange {
             Parameters activeParameters = this.parameters;
 
             // 1.1 ANGRIFF 2: p ist nicht prim
-            if (attackType == AttackType.ATTACK_2 || attackType == AttackType.ALL) {
+            if (attackType == AttackType.ATTACK_2) {
                 activeParameters = Parameters.createNonPrimeModulus();
             }
 
             // 1.2 VALIDIERUNG DER PARAMETER
-            if (validationMode == ValidationMode.VALIDATE 
-                    || validationMode == ValidationMode.VALIDATE_PARAMETERS 
-                    || validationMode == ValidationMode.BOTH) {
+            if (validationMode == ValidationMode.VALIDATE) {
                 Validator.validateParameters(activeParameters.modulus, activeParameters.generator);
             } else {
                 System.out.println("\n-> Keine Validierung der Gruppenparameter durchgeführt.");
@@ -140,7 +135,7 @@ public class KeyExchange {
             BigInteger alicePrivateKey, bobPrivateKey;
 
             // 2.1 ANGRIFF 3: Statische Schlüssel über mehrere Sitzungen
-            if (attackType == AttackType.ATTACK_3 || attackType == AttackType.ALL) {
+            if (attackType == AttackType.ATTACK_3) {
                 // Beispiel für einen Angriff: Verwende statische Schlüssel
                 alicePrivateKey = STATIC_ALICE_PRIVATE_KEY;
                 bobPrivateKey = (customBobPrivateKey != null) ? customBobPrivateKey : STATIC_BOB_PRIVATE_KEY;
@@ -151,8 +146,7 @@ public class KeyExchange {
             }
 
             // 2.2 VALIDIERUNG DER PRIVATEN SCHLÜSSEL
-            if (validationMode == ValidationMode.VALIDATE 
-                    || validationMode == ValidationMode.BOTH) {
+            if (validationMode == ValidationMode.VALIDATE) {
                 Validator.validatePrivateKey(alicePrivateKey, activeParameters.modulus, "Alice");
                 Validator.validatePrivateKey(bobPrivateKey, activeParameters.modulus, "Bob");
             } else {
@@ -171,7 +165,7 @@ public class KeyExchange {
             BigInteger bobReceivedPublicKey = alicePublicKey;
 
             // 3.1 ANGRIFF: MANIPULATION DER ÖFFENTLICHEN WERTE
-            if (attackType == AttackType.ATTACK_1 || attackType == AttackType.ATTACK_3 || attackType == AttackType.ALL) {
+            if (attackType == AttackType.ATTACK_1 || attackType == AttackType.ATTACK_3) {
                 
                 // Wenn ein spezieller Wert gesetzt wurde, nimm diesen. Sonst standardmäßig p-1.
                 BigInteger maliciousValue = (injectedAttackerValue != null) 
@@ -187,9 +181,7 @@ public class KeyExchange {
             }
 
             // 3.2 WERTEVALIDIERUNG VOR BERECHNUNG
-            if (validationMode == ValidationMode.VALIDATE 
-                    || validationMode == ValidationMode.VALIDATE_PUBLIC_VALUES 
-                    || validationMode == ValidationMode.BOTH) {
+            if (validationMode == ValidationMode.VALIDATE) {
                 Validator.validatePublicValue(aliceReceivedPublicKey, activeParameters.modulus, "Alice");
                 Validator.validatePublicValue(bobReceivedPublicKey, activeParameters.modulus, "Bob");
             } else {
@@ -248,7 +240,7 @@ public class KeyExchange {
     // ANGRIFF 3: UNTERGRUPPEN-REKONSTRUKTION & CRT
     // =========================================================================
 
-    public static void simulateAttack3CRT(BigInteger secretBobKey) {
+    public static void simulateAttack3CRT(BigInteger secretBobKey, ValidationMode validationMode) {
         // Setup für die Demo: p = 31 (damit p - 1 = 30 = 2 * 3 * 5), g = 3
         Parameters demoParams = new Parameters(3, 31);
         int[] injectedValues = {30, 25, 16};
@@ -263,7 +255,7 @@ public class KeyExchange {
                 .setParameters(demoParams)
                 .setBobPrivateKey(secretBobKey)
                 .setAttackType(AttackType.ATTACK_3)
-                .setValidationMode(ValidationMode.NONE)
+                .setValidationMode(validationMode)
                 .setInjectedAttackerValue(BigInteger.valueOf(injectedValues[i]));
             session.run();
 
@@ -344,9 +336,4 @@ public class KeyExchange {
         }
         return BigInteger.valueOf(-1);
     }
-
-    public static void main(String[] args) {
-        simulateAttack3CRT(BigInteger.valueOf(13));
-    }
-
 }
